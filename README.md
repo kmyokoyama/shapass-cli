@@ -68,6 +68,12 @@ $ shapass -len=30 -suffix=xpto -show facebook
 7quoXGYb8bMwZKCdIV9s8vSVT68rSWxpto
 ```
 
+```
+$ shapass -len=30 -clip=false -show facebook
+> Enter master password: [mysecret]
+7quoXGYb8bMwZKCdIV9s8vSVT68rSWxpto <Does not copy to clipboard>
+```
+
 ## Contributing
 
 Contributions are welcome.
