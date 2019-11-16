@@ -10,14 +10,25 @@ import (
 	"os"
 )
 
-func encode(secret string) string {
-	ss := sha256.Sum256([]byte(secret))
+func makeSecret(parts ...[]byte) (secret []byte) {
+	for _, part := range parts {
+		secret = append(secret, part...)
+	}
+
+	return secret
+}
+
+func encode(secret []byte) string {
+	ss := sha256.Sum256(secret)
 
 	return base64.StdEncoding.EncodeToString(ss[:])
 }
 
 func main() {
 	lengthOpt := flag.Int("len", 10, "Length of the password")
+	suffixOpt := flag.String("suffix", "", "Suffix to generate the output password")
+	showOpt := flag.Bool("show", false, "Should show output password?")
+	clipOpt := flag.Bool("clip", true, "Should copy output password to system clipboard?")
 
 	flag.Parse()
 
@@ -40,13 +51,17 @@ func main() {
 
 	service := flag.Args()[0]
 
-	encoded := encode(string(append([]byte(service), masterPasswd...)))
+	secret := makeSecret([]byte(service), masterPasswd)
 
-	fmt.Println(len(encoded))
+	encoded := encode(secret)
 
-	passTruncated := encoded[:*lengthOpt]
+	outputPasswd := encoded[:*lengthOpt] + (*suffixOpt)
 
-	fmt.Println(passTruncated)
+	if *showOpt {
+		fmt.Println(outputPasswd)
+	}
 
-	clipboard.WriteAll(string(passTruncated))
+	if *clipOpt {
+		clipboard.WriteAll(string(outputPasswd))
+	}
 }
