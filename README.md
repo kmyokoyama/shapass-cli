@@ -9,6 +9,7 @@ CLI version of Shapass: The password manager that does not store your passwords.
 ```
 $ go get -d github.com/kmyokoyama/shapass-cli
 $ cd $GOPATH/src/github.com/kmyokoyama/shapass-cli
+$ go get -d ./... # Get all dependencies.
 $ go install
 ```
 
@@ -84,7 +85,7 @@ Contributions are welcome.
 Get the required dependencies with:
 
 ```
-$ go get -d github.com/atotto/clipboard
+$ go get -d ./... # Get all dependencies.
 ```
 
 And start hacking!
