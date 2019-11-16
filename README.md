@@ -71,8 +71,11 @@ $ shapass -len=30 -suffix=xpto -show facebook
 ```
 $ shapass -len=30 -clip=false -show facebook
 > Enter master password: [mysecret]
-7quoXGYb8bMwZKCdIV9s8vSVT68rSWxpto <Does not copy to clipboard>
+7quoXGYb8bMwZKCdIV9s8vSVT68rSW <Does not copy to clipboard>
 ```
+
+Note: the final length of the password may exceed 44 characters. In fact, it will have
+`lenFlag + len(suffix)` characters.
 
 ## Contributing
 
