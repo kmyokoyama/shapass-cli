@@ -26,8 +26,8 @@ func encode(secret []byte) string {
 
 func main() {
 	lengthOpt := flag.Int("len", 10, "Length of the password")
-	suffixOpt := flag.String("suffix", "", "Suffix to generate the output password")
-	showOpt := flag.Bool("show", false, "Should show output password?")
+	suffixOpt := flag.String("suffix", "", "Suffix to generate the output password (default \"\")")
+	showOpt := flag.Bool("show", false, "Should show output password? (default false)")
 	clipOpt := flag.Bool("clip", true, "Should copy output password to system clipboard?")
 
 	flag.Parse()
