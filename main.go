@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
@@ -8,14 +9,20 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/atotto/clipboard"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
 const apiUrl = "https://shapass.com/api"
+
+type ShapassCLIConfig struct {
+	Email string
+}
 
 type PasswordConfig struct {
 	Service        string
@@ -137,6 +144,40 @@ func generatePassword(pc PasswordConfig) string {
 	return (pc.Prefix + encoded[:pc.Length] + pc.Suffix)
 }
 
+func storeConfig(configFile string, config ShapassCLIConfig) {
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		return
+	}
+
+	ioutil.WriteFile(configFile, configJSON, 0600)
+}
+
+func configExists(configFile string) bool {
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		return false
+	}
+
+	return true
+}
+
+func loadConfig(configFile string) (ShapassCLIConfig, error) {
+	file, err := os.Open(configFile)
+	if err != nil {
+		return ShapassCLIConfig{}, err
+	}
+
+	configEncoded, err := ioutil.ReadAll(file)
+	if err != nil {
+		return ShapassCLIConfig{}, err
+	}
+
+	var config ShapassCLIConfig
+	json.Unmarshal(configEncoded, &config)
+
+	return config, nil
+}
+
 func main() {
 	lengthOpt := flag.Int("length", 32, "Length of the password")
 	prefixOpt := flag.String("prefix", "", "Prefix to generate the output password (default \"\")")
@@ -153,6 +194,8 @@ func main() {
 	shouldDisplay := *showOpt
 	shouldCopy := *clipOpt
 	shouldFetchFromAPI := *apiOpt
+
+	configFile := os.Getenv("HOME") + "/.shapass"
 
 	var passwordConfig PasswordConfig
 
@@ -172,8 +215,27 @@ func main() {
 		}
 
 		var email string
-		fmt.Print("Email: ")
-		fmt.Scanln(&email)
+		if configExists(configFile) {
+			config, err := loadConfig(configFile)
+			if err == nil {
+				fmt.Printf("Should use email '%s'? [Y/n] ", config.Email)
+				reader := bufio.NewReader(os.Stdin)
+				input, _ := reader.ReadString('\n')
+
+				shouldUseEmailInput := string([]byte(input)[0])
+				shouldUseEmail := strings.TrimSuffix(strings.ToLower(shouldUseEmailInput), "\n")
+
+				if strings.ToLower(shouldUseEmail) == "y" || shouldUseEmail == "" {
+					email = config.Email
+				} else {
+					fmt.Print("Email: ")
+					fmt.Scanln(&email)
+				}
+			}
+		} else {
+			fmt.Print("Email: ")
+			fmt.Scanln(&email)
+		}
 
 		apiPasswordConfig := PasswordConfig{"shapass", passwordConfig.MasterPassword, "", "", 32}
 		apiPassword := generatePassword(apiPasswordConfig)
@@ -183,6 +245,8 @@ func main() {
 			fmt.Println(err)
 			os.Exit(1)
 		}
+
+		storeConfig(configFile, ShapassCLIConfig{Email: email})
 
 		var rule Rule
 		if flag.NArg() == 0 {
