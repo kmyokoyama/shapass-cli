@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -15,6 +16,14 @@ import (
 )
 
 const apiUrl = "https://shapass.com/api"
+
+type PasswordConfig struct {
+	Service        string
+	MasterPassword string
+	Prefix         string
+	Suffix         string
+	Length         int
+}
 
 type Rule struct {
 	Name      string
@@ -59,6 +68,10 @@ func login(email string, password string) (string, error) {
 	var loginResponse LoginResponse
 	json.NewDecoder(resp.Body).Decode(&loginResponse)
 
+	if loginResponse.Status != "OK" {
+		return "", errors.New("Error: login failed (wrong email or password)")
+	}
+
 	return loginResponse.Token, nil
 }
 
@@ -79,6 +92,20 @@ func list(token string) ([]Rule, error) {
 	return listResponse.Rules, nil
 }
 
+func fetchRulesFromAPI(email string, masterPasswd string) ([]Rule, error) {
+	token, err := login(email, masterPasswd)
+	if err != nil {
+		return nil, err
+	}
+
+	rules, err := list(token)
+	if err != nil {
+		return nil, err
+	}
+
+	return rules, nil
+}
+
 func makeSecret(parts ...[]byte) (secret []byte) {
 	for _, part := range parts {
 		secret = append(secret, part...)
@@ -93,77 +120,131 @@ func encode(secret []byte) string {
 	return base64.StdEncoding.EncodeToString(ss[:])
 }
 
-func fetchServiceFromAPI(email string, masterPasswd string) (*Rule, error) {
-	token, err := login("your@email.com", "your-shapass-generated-password")
+func getPassword() (string, error) {
+	masterPassword, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return "", err
 	}
 
-	rules, err := list(token)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	return string(masterPassword), nil
+}
 
-	for _, rule := range rules {
-		if rule.Name == "service" {
-			return &rule, nil
-		}
-	}
+func generatePassword(pc PasswordConfig) string {
+	secret := makeSecret([]byte(pc.Service), []byte(pc.MasterPassword))
+	encoded := encode(secret)
 
-	return nil, fmt.Errorf("shapass: Service not found")
+	return (pc.Prefix + encoded[:pc.Length] + pc.Suffix)
 }
 
 func main() {
-	lengthOpt := flag.Int("len", 10, "Length of the password")
+	lengthOpt := flag.Int("length", 32, "Length of the password")
+	prefixOpt := flag.String("prefix", "", "Prefix to generate the output password (default \"\")")
 	suffixOpt := flag.String("suffix", "", "Suffix to generate the output password (default \"\")")
-	showOpt := flag.Bool("show", false, "Should show output password? (default false)")
-	clipOpt := flag.Bool("clip", true, "Should copy output password to system clipboard? (default true)")
-	setupOpt := flag.Bool("setup", false, "Should fetch and setup? (default false)")
+	showOpt := flag.Bool("display", false, "Should show output password? (default false)")
+	clipOpt := flag.Bool("copy", true, "Should copy output password to system clipboard?")
+	apiOpt := flag.Bool("api", false, "Should fetch configurations from shapass.com? (default false)")
 
 	flag.Parse()
 
-	if *setupOpt {
-		rule, err := fetchServiceFromAPI("yokoyama.km@gmail.com", "H8TAc/fO3M0MgD9D0vfk55AK4YQkeRUZ")
+	outputLength := *lengthOpt
+	prefix := *prefixOpt
+	suffix := *suffixOpt
+	shouldDisplay := *showOpt
+	shouldCopy := *clipOpt
+	shouldFetchFromAPI := *apiOpt
+
+	var passwordConfig PasswordConfig
+
+	fmt.Print("Enter master password: ")
+	masterPassword, err := getPassword()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	passwordConfig.MasterPassword = masterPassword
+
+	if shouldFetchFromAPI {
+		if flag.NArg() > 1 {
+			fmt.Println("Error: Provide at most 1 service as last argument")
+			os.Exit(1)
+		}
+
+		var email string
+		fmt.Print("Email: ")
+		fmt.Scanln(&email)
+
+		apiPasswordConfig := PasswordConfig{"shapass", passwordConfig.MasterPassword, "", "", 32}
+		apiPassword := generatePassword(apiPasswordConfig)
+
+		rules, err := fetchRulesFromAPI(email, apiPassword)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 
-		fmt.Println(rule)
+		var rule Rule
+		if flag.NArg() == 0 {
+			fmt.Printf("Choose a service [1-%d]:\n", len(rules))
+
+			for idx, r := range rules {
+				fmt.Printf("[%d] %s\n", idx+1, r.Name)
+			}
+
+			var serviceIdx int
+			fmt.Scanln(&serviceIdx)
+
+			if serviceIdx < 1 || serviceIdx > len(rules) {
+				fmt.Println("Error: invalid service number")
+				os.Exit(1)
+			}
+
+			rule = rules[serviceIdx-1]
+		} else {
+			serviceName := flag.Args()[0]
+			match := false
+			for _, r := range rules {
+				if r.Name == serviceName {
+					match = true
+					rule = r
+				}
+			}
+
+			if !match {
+				fmt.Printf("Error: Service '%s' not found in shapass API\n", serviceName)
+				os.Exit(1)
+			}
+		}
+
+		passwordConfig.Service = rule.Name
+		passwordConfig.Prefix = rule.Prefix
+		passwordConfig.Suffix = rule.Suffix
+		passwordConfig.Length = rule.Length
+	} else {
+		if flag.NArg() != 1 {
+			fmt.Println("Error: Provide at least 1 service as last argument")
+			os.Exit(1)
+		}
+
+		if outputLength < 1 || outputLength > 44 {
+			fmt.Printf("Error: Invalid output length [%d]. It must be a number from 1 to 44.\n", outputLength)
+			os.Exit(1)
+		}
+
+		passwordConfig.Service = flag.Args()[0]
+		passwordConfig.Prefix = prefix
+		passwordConfig.Suffix = suffix
+		passwordConfig.Length = outputLength
 	}
 
-	if flag.NArg() != 1 {
-		fmt.Println("Error: Provide exactly 1 service as last argument")
-		os.Exit(1)
-	}
+	outputPasswd := generatePassword(passwordConfig)
 
-	if *lengthOpt < 1 || *lengthOpt > 44 {
-		fmt.Printf("Error: Invalid output length [%d]. It must be a number from 1 to 44.\n", *lengthOpt)
-		os.Exit(1)
-	}
-
-	fmt.Println("Enter master password: ")
-	masterPasswd, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	service := flag.Args()[0]
-
-	secret := makeSecret([]byte(service), masterPasswd)
-
-	encoded := encode(secret)
-
-	outputPasswd := encoded[:*lengthOpt] + (*suffixOpt)
-
-	if *showOpt {
+	if shouldDisplay {
 		fmt.Println(outputPasswd)
 	}
 
-	if *clipOpt {
+	if shouldCopy {
 		clipboard.WriteAll(string(outputPasswd))
 	}
 }
