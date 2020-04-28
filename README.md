@@ -2,6 +2,8 @@
 
 CLI version of Shapass: The password manager that does not store your passwords.
 
+Current version: `1.1.0`
+
 [Official website](https://shapass.com/)
 
 ## Installation
