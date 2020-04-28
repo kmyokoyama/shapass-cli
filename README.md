@@ -2,7 +2,7 @@
 
 CLI version of Shapass: The password manager that does not store your passwords.
 
-Current version: `1.1.0`
+Current version: `v1.1.0`
 
 [Official website](https://shapass.com/)
 
@@ -29,10 +29,10 @@ $ cp $GOPATH/bin/shapass-cli /usr/local/bin/shapass
 
 ## Integration with shapass.com API
 
-Since `v1.1.0` shapass-cli is able to fetch data from [shapass.com](shapass.com) API
+Since `v1.1.0` shapass-cli is able to fetch data from [shapass.com](https://shapass.com/) API
 regarding your service parameters so you don't have to repeat yourself when using the
 site and shapass-cli. All your service parameters are available for use in shapass-cli
-as soon as you create and save them on [shapass.com](shapass.com).
+as soon as you create and save them on [shapass.com](https://shapass.com/).
 
 All you have to do is to pass the `-api` argument to shapass-cli
 and provide your master password and email to login to the API. **Your master password
