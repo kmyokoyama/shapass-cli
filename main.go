@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -32,19 +34,22 @@ type PasswordConfig struct {
 	Length         int
 }
 
-type Rule struct {
+type Service struct {
 	Name      string
-	Length    int
+	Length    int `json:"outputLength"`
 	Prefix    string
 	Suffix    string
 	Algorithm string
-	Metadata  map[string]string
 }
 
-type ListResponse struct {
-	Status string
-	Rules  []Rule
-	Code   int
+type EncryptedData struct {
+	IV   []byte `json:"iv"`
+	Data []byte `json:"data"`
+}
+
+type LoadResponse struct {
+	Status        string
+	EncryptedData string
 }
 
 type LoginRequest struct {
@@ -82,35 +87,82 @@ func login(email string, password string) (string, error) {
 	return loginResponse.Token, nil
 }
 
-func list(token string) ([]Rule, error) {
+func load(token string) (EncryptedData, error) {
 	listRequest := TokenRequest{Token: token}
 	reqBody := new(bytes.Buffer)
 	json.NewEncoder(reqBody).Encode(listRequest)
 
-	resp, err := http.Post(apiUrl+"/list", "application/json", reqBody)
+	resp, err := http.Post(apiUrl+"/load", "application/json", reqBody)
 	if err != nil {
-		return nil, err
+		return EncryptedData{}, err
 	}
 	defer resp.Body.Close()
 
-	var listResponse ListResponse
-	json.NewDecoder(resp.Body).Decode(&listResponse)
+	var loadResponse LoadResponse
+	json.NewDecoder(resp.Body).Decode(&loadResponse)
 
-	return listResponse.Rules, nil
+	var encryptedData EncryptedData
+	json.Unmarshal([]byte(loadResponse.EncryptedData), &encryptedData)
+
+	return encryptedData, nil
 }
 
-func fetchRulesFromAPI(email string, masterPasswd string) ([]Rule, error) {
-	token, err := login(email, masterPasswd)
+func decryptPayload(masterPassword string, iv []byte, data []byte) ([]byte, error) {
+	apiPassword := generatePassword(PasswordConfig{"shapass", masterPassword, "", "", 32})
+	tokenPassword := generatePassword(PasswordConfig{masterPassword, apiPassword, "", "", 32})
+
+	var key [32]byte
+	copy(key[:], tokenPassword)
+
+	block, err := aes.NewCipher(key[:])
 	if err != nil {
 		return nil, err
 	}
 
-	rules, err := list(token)
+	if len(data)%aes.BlockSize != 0 {
+		return nil, errors.New("ciphertext is not a multiple of the block size")
+	}
+
+	mode := cipher.NewCBCDecrypter(block, iv)
+
+	mode.CryptBlocks(data, data)
+
+	return data, nil
+}
+
+func fetchServicesFromAPI(email string, masterPassword string) ([]Service, error) {
+	apiPasswordConfig := PasswordConfig{"shapass", masterPassword, "", "", 32}
+	apiPassword := generatePassword(apiPasswordConfig)
+
+	token, err := login(email, apiPassword)
 	if err != nil {
 		return nil, err
 	}
 
-	return rules, nil
+	encryptedData, err := load(token)
+	if err != nil {
+		return nil, err
+	}
+
+	payloadJSON, err := decryptPayload(masterPassword, encryptedData.IV, encryptedData.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	var payload map[string]Service
+	payload = make(map[string]Service)
+
+	err = json.Unmarshal(bytes.Trim(payloadJSON, "\x00"), &payload)
+	if err != nil {
+		return nil, err
+	}
+
+	services := make([]Service, 0, len(payload))
+	for _, service := range payload {
+		services = append(services, service)
+	}
+
+	return services, nil
 }
 
 func makeSecret(parts ...[]byte) (secret []byte) {
@@ -237,10 +289,7 @@ func main() {
 			fmt.Scanln(&email)
 		}
 
-		apiPasswordConfig := PasswordConfig{"shapass", passwordConfig.MasterPassword, "", "", 32}
-		apiPassword := generatePassword(apiPasswordConfig)
-
-		rules, err := fetchRulesFromAPI(email, apiPassword)
+		services, err := fetchServicesFromAPI(email, passwordConfig.MasterPassword)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -248,30 +297,30 @@ func main() {
 
 		storeConfig(configFile, ShapassCLIConfig{Email: email})
 
-		var rule Rule
+		var service Service
 		if flag.NArg() == 0 {
-			fmt.Printf("Choose a service [1-%d]:\n", len(rules))
+			fmt.Printf("Choose a service [1-%d]:\n", len(services))
 
-			for idx, r := range rules {
+			for idx, r := range services {
 				fmt.Printf("[%d] %s\n", idx+1, r.Name)
 			}
 
 			var serviceIdx int
 			fmt.Scanln(&serviceIdx)
 
-			if serviceIdx < 1 || serviceIdx > len(rules) {
+			if serviceIdx < 1 || serviceIdx > len(services) {
 				fmt.Println("Error: invalid service number")
 				os.Exit(1)
 			}
 
-			rule = rules[serviceIdx-1]
+			service = services[serviceIdx-1]
 		} else {
 			serviceName := flag.Args()[0]
 			match := false
-			for _, r := range rules {
+			for _, r := range services {
 				if r.Name == serviceName {
 					match = true
-					rule = r
+					service = r
 				}
 			}
 
@@ -281,10 +330,10 @@ func main() {
 			}
 		}
 
-		passwordConfig.Service = rule.Name
-		passwordConfig.Prefix = rule.Prefix
-		passwordConfig.Suffix = rule.Suffix
-		passwordConfig.Length = rule.Length
+		passwordConfig.Service = service.Name
+		passwordConfig.Prefix = service.Prefix
+		passwordConfig.Suffix = service.Suffix
+		passwordConfig.Length = service.Length
 	} else {
 		if flag.NArg() != 1 {
 			fmt.Println("Error: Provide at least 1 service as last argument")
@@ -310,5 +359,6 @@ func main() {
 
 	if shouldCopy {
 		clipboard.WriteAll(string(outputPasswd))
+		fmt.Println("Password copied to clipboard successfully!")
 	}
 }
