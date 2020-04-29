@@ -130,13 +130,15 @@ func decryptPayload(masterPassword string, iv []byte, data []byte) ([]byte, erro
 		return nil, errors.New(errorMsg)
 	}
 
-	fmt.Printf("IV (size=%d) must have size equal to the block (size=%d)", len(iv), aes.BlockSize)
-
 	mode := cipher.NewCBCDecrypter(block, iv)
 
 	mode.CryptBlocks(data, data)
 
 	return data, nil
+}
+
+func isEmpty(ed EncryptedData) bool {
+	return (len(ed.IV) == 0 || len(ed.Data) == 0)
 }
 
 func fetchServicesFromAPI(email string, masterPassword string) ([]Service, error) {
@@ -151,6 +153,10 @@ func fetchServicesFromAPI(email string, masterPassword string) ([]Service, error
 	encryptedData, err := load(token)
 	if err != nil {
 		return nil, err
+	}
+
+	if isEmpty(encryptedData) {
+		return nil, errors.New("No service data to load from API")
 	}
 
 	payloadJSON, err := decryptPayload(masterPassword, encryptedData.IV, encryptedData.Data)
