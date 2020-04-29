@@ -123,6 +123,15 @@ func decryptPayload(masterPassword string, iv []byte, data []byte) ([]byte, erro
 		return nil, errors.New("ciphertext is not a multiple of the block size")
 	}
 
+	if len(iv) != aes.BlockSize {
+		errorMsg := fmt.Sprintf("IV (size: %d) must have size equal to the block size (%d)",
+			len(iv), aes.BlockSize)
+
+		return nil, errors.New(errorMsg)
+	}
+
+	fmt.Printf("IV (size=%d) must have size equal to the block (size=%d)", len(iv), aes.BlockSize)
+
 	mode := cipher.NewCBCDecrypter(block, iv)
 
 	mode.CryptBlocks(data, data)
