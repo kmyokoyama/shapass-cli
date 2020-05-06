@@ -51,13 +51,13 @@ $ shapass -help
   -copy
         Should copy output password to system clipboard? (default true)
   -display
-        Should show output password? (default false)
+        Should display output password? (default false)
   -length int
-        Length of the password (default 32)
+        Length of the output password (default 32)
   -prefix string
-        Prefix to generate the output password (default "")
+        Prefix to prepend to the output password (default "")
   -suffix string
-        Suffix to generate the output password (default "")
+        Suffix to append to the output password (default "")
 ```
 
 ## Examples
