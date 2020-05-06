@@ -72,28 +72,28 @@ Password copied to clipboard successfully!
 ```
 $ shapass -display facebook
 > Enter master password: [mysecret]
-7quoXGYb8b
+7quoXGYb8bMwZKCdIV9s8vSVT68rSWnL
 Password copied to clipboard successfully!
 ```
 
 ```
 $ shapass -suffix=xpto -display facebook
 > Enter master password: [mysecret]
+7quoXGYb8bMwZKCdIV9s8vSVT68rSWnLxpto
+Password copied to clipboard successfully!
+```
+
+```
+$ shapass -length=10 -suffix=xpto -display facebook
+> Enter master password: [mysecret]
 7quoXGYb8bxpto
 Password copied to clipboard successfully!
 ```
 
 ```
-$ shapass -length=30 -suffix=xpto -display facebook
+$ shapass -length=10 -copy=false -display facebook
 > Enter master password: [mysecret]
-7quoXGYb8bMwZKCdIV9s8vSVT68rSWxpto
-Password copied to clipboard successfully!
-```
-
-```
-$ shapass -length=30 -copy=false -display facebook
-> Enter master password: [mysecret]
-7quoXGYb8bMwZKCdIV9s8vSVT68rSW
+7quoXGYb8b
 <Does not copy to clipboard>
 ```
 
