@@ -42,6 +42,15 @@ Your email is persisted in `${HOME}/.shapass` so you don't have to type it every
 
 ## Usage
 
+> *Tip: Add a leading whitespace to the shapass command (or any other command)
+> and it will not be in your history*.
+
+```
+$> shapass facebook
+  ^
+  |-- leading whitespace (this command will not appear in your history, extra safety)!
+```
+
 The last argument must always be the target service (e.g., `facebook`, `twitter` etc).
 ```
 $ shapass -help
